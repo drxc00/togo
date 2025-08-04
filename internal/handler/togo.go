@@ -1,8 +1,13 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+
+	"drxc00/togo/internal/models"
+	"drxc00/togo/internal/services"
 
 	"github.com/gorilla/mux"
 )
@@ -18,12 +23,69 @@ func getOrderID(r *http.Request) (string, bool) {
 }
 
 func CreateTogo(w http.ResponseWriter, r *http.Request) {
-	orderID := "12345"
-	response := fmt.Sprintf(`{"message": "To go created successfully", "togo_id": "%s"}`, orderID)
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		res := models.Response{
+			Message: "Error reading request body",
+			Success: false,
+			Data:    models.Togo{},
+		}
+
+		jsonResponse, err := res.Print()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, jsonResponse)
+		return
+	}
+
+	var requestBody models.TogoRequest
+	err = json.Unmarshal(body, &requestBody)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		res := models.Response{
+			Message: "Error parsing request body",
+			Success: false,
+			Data:    models.Togo{},
+		}
+		jsonResponse, err := res.Print()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintln(w, jsonResponse)
+		return
+	}
+
+	togo, ok := services.CreateTogo(requestBody)
+
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response := models.Response{
+		Message: "To go created successfully",
+		Success: true,
+		Data:    togo,
+	}
+
+	jsonResponse, err := response.Print()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// Write response
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintln(w, response)
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintln(w, jsonResponse)
 }
 
 func GetTogo(w http.ResponseWriter, r *http.Request) {
